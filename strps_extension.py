@@ -33,11 +33,87 @@ class StrpsExtension(inkex.GenerateExtension):
     font_size = 5
     font_size_1 = 4
     font_size_2 = 3
-    font_family = "Arial"
+    font_family = "RobotoMono Nerd Font"
     size = 10
+    stroke_width = 0.1
+    stroke_color = "#000000"
+    bg_color_0 = "#AAAAAA"  # week days header background color
+    bg_color_1 = "#AAAAAA"  # week number background color
+    bg_color_2 = "#DDDDDD"  # each day background color 1
+    bg_color_3 = "#EEEEEE"  # each day background color 2
+    font_color_0 = "#000000"
     w_days = ["L", "M", "M", "J", "V", "S", "D"]
 
     gap = 1
+
+    weekdays_styles = {
+        "font": f"""
+        font-size: {font_size};
+        fill:#000000;
+        text-anchor:middle;
+        dominant-baseline:middle;
+        font-family: {font_family};""",
+        "box": f"""
+        fill: {bg_color_0};
+        stroke: {stroke_color};
+        stroke-width: 0.1mm;
+        """,
+    }
+
+    weeknumber_styles = {
+        "font_1": f"""
+        font-size: {font_size_2};
+        fill:#000000;
+        text-anchor:middle;
+        dominant-baseline:hanging;
+        font-family: {font_family};
+        """,
+        "font_2": f"""
+        font-size: {font_size_1};
+        fill:#000000;
+        text-anchor:middle;
+        dominant-baseline:middle;
+        font-family: {font_family};
+        """,
+        "font_3": f"""
+        font-size: {font_size_2};
+        fill:#000000;
+        text-anchor:middle;
+        dominant-baseline:auto;
+        font-family: {font_family};
+        """,
+        "box": f"""
+        fill: {bg_color_1};
+        stroke: {stroke_color};
+        stroke-width: 0.1mm;
+        """,
+    }
+
+    even_days_styles = {
+        "big_box": f"""
+        fill: {bg_color_2};
+        stroke: {stroke_color};
+        stroke-width: 0.1mm;
+        """,
+        "small_box": f"""
+        fill: {bg_color_2};
+        stroke: {stroke_color};
+        stroke-width: 0.1mm;
+        """,
+    }
+
+    odd_days_styles = {
+        "big_box": f"""
+        fill: {bg_color_3};
+        stroke: {stroke_color};
+        stroke-width: 0.1mm;
+        """,
+        "small_box": f"""
+        fill: {bg_color_3};
+        stroke: {stroke_color};
+        stroke-width: 0.1mm;
+        """,
+    }
 
     def add_arguments(self, pars):
         pars.add_argument(
@@ -46,25 +122,18 @@ class StrpsExtension(inkex.GenerateExtension):
             help="An example option, put your options here",
         )
 
-    def Square_with_text(self, x, y, size, text: str, font_size, font_family):
-        t = TextElement.new(
-            style=f"font-size:{font_size};fill:#000000; text-anchor:middle; dominant-baseline:middle;"
-        )
+    def Square_with_text(self, x, y, size, text: str):
+        t = TextElement.new(style=self.weekdays_styles["font"])
         t.text = text
-        t.set("font-family", font_family)
         t.set("x", x + size / 2)
         t.set("y", y + size / 2)
-        r = Rectangle.new(
-            (x), y, size, size, style="fill:none;stroke:#000000;stroke-width:0.1mm"
-        )
-        g = Group.new("Week Day", t, r)
+        r = Rectangle.new(x, y, size, size, style=self.weekdays_styles["box"])
+        g = Group.new("Week Day", r, t)
         return g
 
-    def Square_with_squares(self, x, y, size):
+    def Square_with_squares(self, x, y, size, style):
         q = 5
-        s_1 = Rectangle.new(
-            (x), y, size, size, style="fill:none;stroke:#000000;stroke-width:0.1mm"
-        )
+        s_1 = Rectangle.new((x), y, size, size, style=style["big_box"])
         s_a = []
         for i in range(q):
             s_a.append(
@@ -73,20 +142,24 @@ class StrpsExtension(inkex.GenerateExtension):
                     y,
                     size / q,
                     size / q,
-                    style="fill:none;stroke:#000000;stroke-width:0.1mm",
+                    style=style["small_box"],
                 )
             )
         g = Group.new("Week Day", s_1, *s_a)
         return g
 
     def Generate_week(self, x, y, size, week_number: int, year: int):
+        days_style = (
+            self.even_days_styles if ((week_number % 2) == 0) else self.odd_days_styles
+        )
+
         week_number = self.Square_with_week_number(
-            x, y, size, 5, "Arial", week_number, year
-        )  # TODO: change this to take values from user input
-        week = []
+            x, y, size, 5, self.font_family, week_number, year
+        )
+        days = []
         for i in range(7):
-            week.append(self.Square_with_squares(i * size + size, y, size))
-        return Group.new("Week", week_number, *week)
+            days.append(self.Square_with_squares(i * size + size, y, size, days_style))
+        return Group.new("Week", week_number, *days)
 
     # function that gets the year, the week nomber and returns the dates of the monday and sunday of that week
     def get_week_dates(self, year: int, week_number: int):
@@ -103,51 +176,35 @@ class StrpsExtension(inkex.GenerateExtension):
     ):
         dates = self.get_week_dates(year, week_number)
 
-        t1 = TextElement.new(
-            style=f"font-size:{self.font_size_2};fill:#000000; text-anchor:middle; dominant-baseline: hanging ;"
-        )
+        t1 = TextElement.new(style=self.weeknumber_styles["font_1"])
         t1.text = dates[0].strftime("%b%d").upper()
-        t1.set("font-family", font_family)
         t1.set("x", x + size / 2)
         t1.set("y", y + self.gap)  # TODO: change this to take values to variable
 
-        t2 = TextElement.new(
-            style=f"font-size:{self.font_size_1};fill:#000000; text-anchor:middle; dominant-baseline:middle;"
-        )
-
+        t2 = TextElement.new(style=self.weeknumber_styles["font_2"])
         t2.text = str(week_number)
-        t2.set("font-family", font_family)
         t2.set("x", x + size / 2)
         t2.set("y", y + size / 2)
 
-        t3 = TextElement.new(
-            style=f"font-size:{self.font_size_2};fill:#000000; text-anchor:middle; dominant-baseline: auto;"
-        )
+        t3 = TextElement.new(style=self.weeknumber_styles["font_3"])
         t3.text = dates[1].strftime("%b%d").upper()
-        t3.set("font-family", font_family)
         t3.set("x", x + size / 2)
         t3.set("y", y + size - self.gap)
 
-        r = Rectangle.new(
-            (x), y, size, size, style="fill:none;stroke:#000000;stroke-width:0.1mm"
-        )
-        g = Group.new("Week Day", t1, t2, t3, r)
+        r = Rectangle.new((x), y, size, size, style=self.weeknumber_styles["box"])
+        g = Group.new("Week Day", r, t1, t2, t3)
         return g
 
     def generate(self):
-
         # Temporal arguments for generating the grid, TODO: change this to take values from user input
-        font_size = 5
-        font_family = "Arial"
+
         size = 10
         w_days = ["L", "M", "M", "J", "V", "S", "D"]
 
         # Generate Week Headers as a group
         week_square = []
         for i in range(7):
-            g = self.Square_with_text(
-                i * size + size, 0, size, w_days[i], font_size, font_family
-            )
+            g = self.Square_with_text(i * size + size, 0, size, w_days[i])
             week_square.append(g)
 
         # Generate Week Headers as a group
