@@ -36,12 +36,12 @@ class StrpsExtension(inkex.GenerateExtension):
     font_family = "RobotoMono Nerd Font"
     size = 10
     stroke_width = 0.1
-    stroke_color = "#000000"
+    stroke_color = "#252525"
     bg_color_0 = "#AAAAAA"  # week days header background color
     bg_color_1 = "#AAAAAA"  # week number background color
     bg_color_2 = "#DDDDDD"  # each day background color 1
     bg_color_3 = "#EEEEEE"  # each day background color 2
-    font_color_0 = "#000000"
+    font_color_0 = "#101010"
     w_days = ["L", "M", "M", "J", "V", "S", "D"]
 
     gap = 1

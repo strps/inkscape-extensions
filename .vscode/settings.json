@@ -2,7 +2,9 @@
     "json.schemaDownload.enable": false,
     "python.defaultInterpreterPath": "C:\\Program Files\\Inkscape\\bin\\python.exe",
     "python.autoComplete.extraPaths": [
-        "C:\\Program Files\\Inkscape\\share\\inkscape\\extensions\\inkex"
+        "C:\\Program Files\\Inkscape\\share\\inkscape\\extensions\\inkex",
+        "C:\\Program Files\\Inkscape\\share\\inkscape\\extensions\\inkex\\*",
+        "C:\\Program Files\\Inkscape\\share\\inkscape\\extensions\\inkex\\**"
     ],
     "python.analysis.extraPaths": [
         "C:\\Program Files\\Inkscape\\share\\inkscape\\extensions\\inkex",

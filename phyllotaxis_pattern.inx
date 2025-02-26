@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+    <_name>Phyllotaxis Pattern</_name>
+    <id>org.inkscape.template.strps_phyllotaxis_pattern</id>
+
+    <label appearance="header">Phyllotaxis Pattern</label>
+    <label>This extension creates a Phyllotaxis pattern from circles.</label>
+
+    <param name="iterations" type="int" min="1" max="200" gui-text="Iterations">100</param>
+    <param name="constant" type="float" min="0" max="100" gui-text="Constant">5</param>
+    <param name="scale_constant" type="float" precision="4" min="-10" max="10" gui-text="Scaling Constant with each iteration">1</param>
+    <param name="radius" type="float" min="0" max="100" gui-text="Radius">5</param>
+    <param name="scale_radius" type="float" precision="4" min="-10" max="10" gui-text="Scaling Radius with each iteration">1</param>
+    
+   
+    <param/>
+    <effect>
+        <!-- <object-type>all</object-type> -->
+        <effects-menu>
+            <submenu name="STRPS"/>
+        </effects-menu>
+    </effect>
+
+    <script>
+        <command location="inx" interpreter="python">phyllotaxis_pattern.py</command>
+    </script>
+</inkscape-extension>

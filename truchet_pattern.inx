@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+    <_name>Truchet Pattern</_name>
+    <id>org.inkscape.template.strps_truchet_pattern</id>
+
+    <label appearance="header">Truchet Pattern</label>
+    <label>This extension creates a trushet pattern from file symbols.</label>
+
+    <param name="columns" type="int" min="1" max="100" gui-text="Columns">5</param>
+    <param name="rows" type="int" min="1" max="100" gui-text="Rows">5</param>
+    <param name="tile_size" type="float" min="1" max="100" gui-text="Tile Size">10</param>
+
+    <param/>
+    <effect>
+        <!-- <object-type>all</object-type> -->
+        <effects-menu>
+            <submenu name="STRPS"/>
+        </effects-menu>
+    </effect>
+
+    <script>
+        <command location="inx" interpreter="python">truchet_pattern.py</command>
+    </script>
+</inkscape-extension>
