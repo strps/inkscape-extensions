@@ -1,15 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
-  <_name>Strps Extension</_name>
+  <_name>Habit HeatMap</_name>
   <id>org.inkscape.template.strps_extension</id>
   
   <vbox>
-    <label appearance="header">STRPS EXTENSION</label>
+    <label appearance="header">HeatMap Extension</label>
     <!-- <param name="mybool" type="bool" gui-text="Some label text">false</param> -->
-    <param name='Effect' type='enum' _gui-text='Select Effect: '>
-      <option value='heatMap'>HeatMap</option> 
-      <option value='heatMap'>Truchet</option> 
-    </param>
+    <option name='cellSize' type='float' gui-text='Cell Size' min="1" max="100">5</option> 
+    <option name='fontSize' type='float' gui-text='Font Size' min="1" max="100">5</option> 
 
   </vbox>
 
@@ -21,6 +19,8 @@
   </effect>
 
   <script>
-    <command location="inx" interpreter="python">strps_extension.py</command>
+    <command location="inx" interpreter="python">habit_heatmap.py</command>
   </script>
 </inkscape-extension>
+
+

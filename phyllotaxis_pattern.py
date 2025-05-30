@@ -30,6 +30,9 @@ class PhyllotaxisPattern(inkex.GenerateExtension):
         pars.add_argument(
             "-v", "--scale_constant", type=float, default=1, help="scaling constant for each iteration of phyllotaxis"
         )
+        pars.add_argument(
+            "-a", "--angle", type=float, default=137.5, help="angle for each iteration of phyllotaxis"
+        )
 
 
     def generate(self):
@@ -37,8 +40,8 @@ class PhyllotaxisPattern(inkex.GenerateExtension):
 
         phyllotaxis_group = []
         for i in range(self.options.iterations):
-            x= (self.options.constant + i * self.options.scale_constant) * math.sqrt(i) * math.cos(self.angle * i)
-            y= (self.options.constant + i * self.options.scale_constant) * math.sqrt(i) * math.sin(self.angle * i)
+            x= (self.options.constant + i * self.options.scale_constant) * math.sqrt(i) * math.cos(self.options.angle * i)
+            y= (self.options.constant + i * self.options.scale_constant) * math.sqrt(i) * math.sin(self.options.angle * i)
             circle = Circle.new([x,y], self.options.radius + self.options.scale_radius * i)
             phyllotaxis_group.append(circle)
 

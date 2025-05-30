@@ -7,6 +7,7 @@
     <label>This extension creates a Phyllotaxis pattern from circles.</label>
 
     <param name="iterations" type="int" min="1" max="200" gui-text="Iterations">100</param>
+    <param name="angle" type="float" precision="4" min="-10" max="360" gui-text="Angle">137.5</param>
     <param name="constant" type="float" min="0" max="100" gui-text="Constant">5</param>
     <param name="scale_constant" type="float" precision="4" min="-10" max="10" gui-text="Scaling Constant with each iteration">1</param>
     <param name="radius" type="float" min="0" max="100" gui-text="Radius">5</param>

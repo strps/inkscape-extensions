@@ -26,7 +26,7 @@ import inkex
 from inkex.elements import TextElement, Rectangle, Group
 
 
-class StrpsExtension(inkex.GenerateExtension):
+class HabitHeatMap(inkex.GenerateExtension):
     """Please rename this class, don't keep it unnamed"""
 
     year = 2023
@@ -45,6 +45,17 @@ class StrpsExtension(inkex.GenerateExtension):
     w_days = ["L", "M", "M", "J", "V", "S", "D"]
 
     gap = 1
+
+    def add_arguments(self, pars):
+        pars.add_argument(
+            "-c", "--cellSize", type=float, default=5, help="cell size"
+        )
+        pars.add_argument(
+            "-f", "--fontSize", type=float, default=5, help="font size"
+        )
+
+
+
 
     weekdays_styles = {
         "font": f"""
@@ -237,4 +248,4 @@ class StrpsExtension(inkex.GenerateExtension):
 
 
 if __name__ == "__main__":
-    StrpsExtension().run()
+    HabitHeatMap().run()

@@ -45,7 +45,7 @@ class TruchetPattern(inkex.GenerateExtension):
                 use = Use.new(symbol, 0, 0)
                 use.transform.add_translate(self.options.tile_size * i, self.options.tile_size * j)
                 # use.transform.add_rotate(deg=90 * random.randrange(4), center_x = 0, center_y =0)
-                use.transform.add_rotate(deg=90 * random.randrange(4), 1, 1)
+                use.transform.add_rotate(deg=90 * random.randrange(4))
                 # use.transform.add_rotate(deg=90 * random.randrange(4))
                 # use.transform.add_translate(-self.tile_edge/2, -self.tile_edge/2)
                 truchet.append(use)
