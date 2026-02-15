@@ -1,59 +1,75 @@
 """
-Creates truchet patter from symbols.
+Creates Truchet pattern from symbols in the document's <defs>.
+Updated for modern Inkscape (1.3+ / inkex 1.3+).
 """
-
-from lxml.etree import tostring
 
 import random
 import inkex
-from inkex import TextElement, FlowRoot
-from inkex.utils import KeyDict
-from inkex.elements import Use, Group, Rectangle
+from inkex import Use, Group, Symbol
 
 
 class TruchetPattern(inkex.GenerateExtension):
-
-
-    tile_edge = 40
-
     def add_arguments(self, pars):
         pars.add_argument(
-            "-c", "--columns", type=int, default=5, help="number of tiles in x direction"
+            "-c", "--columns", type=int, default=10,
+            help="Number of tiles horizontally"
         )
         pars.add_argument(
-            "-r", "--rows", type=int, default=5, help="number of tiles in y direction"
+            "-r", "--rows", type=int, default=10,
+            help="Number of tiles vertically"
         )
         pars.add_argument(
-            "-t", "--tile_size", type=float, default=5, help="number of tiles in y direction"
+            "-s", "--tile_size", type=float, default=40.0,
+            help="Size of each tile (in document units)"
         )
-
-
-    def ttt(self, element): ...
 
     def generate(self):
-
-        symbols = self.svg.defs
-
-        if len(symbols) == 0:
-            inkex.errormsg("No symbols found in the document.")
+        # Get only <symbol> elements from defs
+        symbols = [el for el in self.svg.defs if isinstance(el, Symbol)]
+        if not symbols:
+            inkex.errormsg("No symbols found in the document's <defs>.\n"
+                           "Create some symbols (Object → Symbol) and try again.")
             return
 
         truchet = []
+        size = self.options.tile_size
+        half = size / 2.0
+
         for i in range(self.options.columns):
             for j in range(self.options.rows):
-                symbol = symbols[random.randrange(len(symbols))]
+                # Pick a random symbol
+                symbol = random.choice(symbols)
+
+                # Create <use> — now with the required x=0, y=0
                 use = Use.new(symbol, 0, 0)
-                use.transform.add_translate(self.options.tile_size * i, self.options.tile_size * j)
-                # use.transform.add_rotate(deg=90 * random.randrange(4), center_x = 0, center_y =0)
-                use.transform.add_rotate(deg=90 * random.randrange(4))
-                # use.transform.add_rotate(deg=90 * random.randrange(4))
-                # use.transform.add_translate(-self.tile_edge/2, -self.tile_edge/2)
+
+                # Build transform: position + rotate around own center
+                angle = 90 * random.randrange(4)
+                px = i * size
+                py = j * size
+
+                t = inkex.Transform()
+                t.add_rotate(angle, [px, py])                  # ← rotate FIRST, in place around (0,0)
+                t.add_translate(px, py)              # ← then translate to position
+
+                # t = inkex.Transform()
+                # t.add_translate(px, py)           # move to grid position
+                # t.add_translate(half, half)       # move to center
+                # t.add_rotate(angle)               # rotate
+                # t.add_translate(-half, -half)     # move back
+
+                use.transform = t
+                
+
+                # Force the tile to the chosen size
+                #use.set("width", str(size))
+                #use.set("height", str(size))
+
                 truchet.append(use)
 
-        truchet_group = Group.new("Truchet", *truchet)
-
-        return truchet_group
-
+        # Wrap everything in a group
+        group = Group.new("Truchet Pattern", *truchet)
+        return group
 
 if __name__ == "__main__":
     TruchetPattern().run()
