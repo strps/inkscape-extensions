@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+  <name>Join Paths</name>
+  <id>org.inkscape.extensions.join_paths</id>
+
+  <param name="tolerance" type="float" min="0.001" max="100.0" precision="3" gui-text="Endpoint tolerance">0.1</param>
+  <param name="units" type="optiongroup" appearance="combo" gui-text="Units">
+    <option value="mm">mm</option>
+    <option value="cm">cm</option>
+    <option value="in">in</option>
+    <option value="pt">pt</option>
+    <option value="px">px</option>
+  </param>
+  <param name="keep_style" type="bool" gui-text="Keep style of first path">true</param>
+
+  <effect needs-live-preview="false">
+    <object-type>path</object-type>
+    <effects-menu>
+      <submenu name="Generate from Path"/>
+    </effects-menu>
+  </effect>
+  <script>
+    <command location="inx" interpreter="python">join_paths.py</command>
+  </script>
+</inkscape-extension>
