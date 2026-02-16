@@ -16,7 +16,7 @@
   <effect needs-live-preview="false">
     <object-type>path</object-type>
     <effects-menu>
-      <submenu name="Generate from Path"/>
+      <submenu name="STRPS"/>
     </effects-menu>
   </effect>
   <script>
