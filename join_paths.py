@@ -6,15 +6,35 @@ Joins selected open paths whose endpoints coincide (within a tolerance).
 Paths are chained end-to-end: if the end of path A is within tolerance of the
 start (or end) of path B, the two are merged into a single continuous path.
 
+Handles:
+  - Paths with transforms (rotate, translate, etc.) – endpoints are compared
+    in document-space after applying the composed transform.
+  - Sodipodi arc elements – arc metadata is stripped after merging so Inkscape
+    does not regenerate the old single-arc path data.
+  - ZoneClose (Z) commands – trailing Z is stripped before concatenation;
+    if the final merged path's end meets its start, Z is re-added.
+
 Works with the modern inkex API (Inkscape 1.0+).
 """
 
-__version__ = "1.0"
-__author__ = "CJ"
+__version__ = "1.1"
+__author__ = "CJ & GitHub Copilot (Claude Opus 4.6)"
 
-import sys
 import math
 import inkex
+
+# Sodipodi / Inkscape arc attributes that must be removed after merging
+_SODIPODI_ARC_ATTRS = [
+    inkex.addNS("type", "sodipodi"),
+    inkex.addNS("cx", "sodipodi"),
+    inkex.addNS("cy", "sodipodi"),
+    inkex.addNS("rx", "sodipodi"),
+    inkex.addNS("ry", "sodipodi"),
+    inkex.addNS("start", "sodipodi"),
+    inkex.addNS("end", "sodipodi"),
+    inkex.addNS("open", "sodipodi"),
+    inkex.addNS("arc-type", "sodipodi"),
+]
 
 
 class JoinPaths(inkex.EffectExtension):
@@ -49,7 +69,7 @@ class JoinPaths(inkex.EffectExtension):
 
     @staticmethod
     def _start(path_cmds):
-        """Return the first point of an inkex.Path (after converting to absolute)."""
+        """Return the first on-curve point of an inkex.Path."""
         for cmd in path_cmds:
             if hasattr(cmd, "x") and hasattr(cmd, "y"):
                 return (cmd.x, cmd.y)
@@ -65,6 +85,20 @@ class JoinPaths(inkex.EffectExtension):
         return last
 
     @staticmethod
+    def _is_closed(path):
+        """Return True if the path ends with a ZoneClose (Z) command."""
+        cmds = list(path)
+        return len(cmds) > 0 and isinstance(cmds[-1], inkex.paths.ZoneClose)
+
+    @staticmethod
+    def _strip_close(path):
+        """Return a copy of path with any trailing ZoneClose removed."""
+        cmds = list(path)
+        while cmds and isinstance(cmds[-1], inkex.paths.ZoneClose):
+            cmds.pop()
+        return inkex.Path(cmds)
+
+    @staticmethod
     def _reverse_path(path):
         """Return the reversed inkex.Path."""
         return path.reverse()
@@ -76,7 +110,28 @@ class JoinPaths(inkex.EffectExtension):
     @staticmethod
     def _count_nodes(path):
         """Count the number of on-curve nodes in an inkex.Path."""
-        return sum(1 for cmd in path if hasattr(cmd, 'x') and hasattr(cmd, 'y'))
+        return sum(1 for cmd in path if hasattr(cmd, "x") and hasattr(cmd, "y"))
+
+    @staticmethod
+    def _flatten_path(node):
+        """Return the path of *node* in document-space (transform baked in).
+
+        Converts to absolute coordinates and applies the element's composed
+        transform so that endpoint coordinates are in a common reference frame.
+        """
+        abs_path = node.path.to_absolute()
+        ctm = node.composed_transform()
+        if ctm is not None and ctm != inkex.Transform():
+            abs_path = abs_path.transform(ctm)
+        return abs_path
+
+    @staticmethod
+    def _strip_sodipodi(node):
+        """Remove sodipodi arc metadata from *node* so Inkscape won't
+        regenerate the ``d`` attribute from stale arc parameters."""
+        for attr in _SODIPODI_ARC_ATTRS:
+            if attr in node.attrib:
+                del node.attrib[attr]
 
     # ── main logic ─────────────────────────────────────────────────────
     def effect(self):
@@ -95,15 +150,15 @@ class JoinPaths(inkex.EffectExtension):
             self.options.tolerance, self.options.units
         )
 
-        # We work with a list of "chain" dicts so we can merge freely.
-        # Each chain: {'node': original SVG element, 'path': inkex.Path (absolute)}
+        # Build chain list.  ``doc_path`` is the path with transforms baked in
+        # (used for endpoint comparison and for the final merged result).
         chains = []
         paths_before = len(paths)
         nodes_before = 0
         for node in paths:
-            abs_path = node.path.to_absolute()
-            nodes_before += self._count_nodes(abs_path)
-            chains.append({"node": node, "path": abs_path})
+            doc_path = self._flatten_path(node)
+            nodes_before += self._count_nodes(doc_path)
+            chains.append({"node": node, "path": doc_path})
 
         joins = 0
         changed = True
@@ -132,80 +187,111 @@ class JoinPaths(inkex.EffectExtension):
                 i += 1
 
         # Write final paths back to the SVG
+        closed_count = 0
         nodes_after = 0
         for chain in chains:
-            chain["node"].path = chain["path"]
-            nodes_after += self._count_nodes(chain["path"])
+            path = chain["path"]
+            node = chain["node"]
 
-        # Print stats
+            # Auto-close paths whose end meets their start
+            p_start = self._start(path)
+            p_end = self._end(path)
+            if (
+                p_start is not None
+                and p_end is not None
+                and not self._is_closed(path)
+                and self._distance(p_start, p_end) <= tolerance
+            ):
+                cmds = list(path)
+                cmds.append(inkex.paths.ZoneClose())
+                path = inkex.Path(cmds)
+                closed_count += 1
+
+            nodes_after += self._count_nodes(path)
+
+            # Write the document-space path and remove the old transform
+            node.path = path
+            if "transform" in node.attrib:
+                del node.attrib["transform"]
+
+            # Strip sodipodi arc metadata so Inkscape doesn't overwrite our
+            # merged path on the next load / save.
+            self._strip_sodipodi(node)
+
+        # ── stats ──────────────────────────────────────────────────────
         paths_after = len(chains)
         inkex.errormsg(
             f"Join Paths stats:\n"
             f"  Joins performed: {joins}\n"
-            f"  Paths before: {paths_before}  →  after: {paths_after}\n"
-            f"  Nodes before: {nodes_before}  →  after: {nodes_after}"
+            f"  Paths auto-closed: {closed_count}\n"
+            f"  Paths before: {paths_before}  ->  after: {paths_after}\n"
+            f"  Nodes before: {nodes_before}  ->  after: {nodes_after}"
         )
 
+    # ── merging ────────────────────────────────────────────────────────
     def _try_merge(self, a, b, tol):
-        """
-        Try to join two chains.  Returns a new chain dict on success, None otherwise.
+        """Try to join two chains.  Returns a new chain dict or None.
 
-        Four cases (A=chain a, B=chain b):
-          A.end   ≈ B.start  →  A + B
-          A.end   ≈ B.end    →  A + reverse(B)
-          A.start ≈ B.start  →  reverse(B) + A  (equivalently reverse(A) + B → keep A node)
-          A.start ≈ B.end    →  B + A
+        Four endpoint cases:
+          A.end   ≈ B.start  ->  A + B
+          A.end   ≈ B.end    ->  A + reverse(B)
+          A.start ≈ B.end    ->  B + A
+          A.start ≈ B.start  ->  reverse(B) + A
         """
-        a_start = self._start(a["path"])
-        a_end = self._end(a["path"])
-        b_start = self._start(b["path"])
-        b_end = self._end(b["path"])
+        pa = self._strip_close(a["path"])
+        pb = self._strip_close(b["path"])
+
+        a_start = self._start(pa)
+        a_end = self._end(pa)
+        b_start = self._start(pb)
+        b_end = self._end(pb)
 
         if None in (a_start, a_end, b_start, b_end):
             return None
 
-        keep_node = a["node"]  # always keep a's SVG element
+        keep_node = a["node"]
 
-        # Case 1: A.end ≈ B.start  →  A + B
+        # Case 1: A.end ≈ B.start  ->  A + B
         if self._distance(a_end, b_start) <= tol:
-            new_path = self._concat_paths(a["path"], b["path"])
-            return {"node": keep_node, "path": new_path}
+            return {"node": keep_node, "path": self._concat_paths(pa, pb)}
 
-        # Case 2: A.end ≈ B.end  →  A + reverse(B)
+        # Case 2: A.end ≈ B.end  ->  A + reverse(B)
         if self._distance(a_end, b_end) <= tol:
-            new_path = self._concat_paths(a["path"], self._reverse_path(b["path"]))
-            return {"node": keep_node, "path": new_path}
+            return {
+                "node": keep_node,
+                "path": self._concat_paths(pa, self._reverse_path(pb)),
+            }
 
-        # Case 3: A.start ≈ B.end  →  B + A
+        # Case 3: A.start ≈ B.end  ->  B + A
         if self._distance(a_start, b_end) <= tol:
-            new_path = self._concat_paths(b["path"], a["path"])
-            return {"node": keep_node, "path": new_path}
+            return {"node": keep_node, "path": self._concat_paths(pb, pa)}
 
-        # Case 4: A.start ≈ B.start  →  reverse(B) + A
+        # Case 4: A.start ≈ B.start  ->  reverse(B) + A
         if self._distance(a_start, b_start) <= tol:
-            new_path = self._concat_paths(
-                self._reverse_path(b["path"]), a["path"]
-            )
-            return {"node": keep_node, "path": new_path}
+            return {
+                "node": keep_node,
+                "path": self._concat_paths(self._reverse_path(pb), pa),
+            }
 
         return None
 
     @staticmethod
     def _concat_paths(path_a, path_b):
-        """
-        Concatenate two inkex.Path objects into one continuous path.
+        """Concatenate two inkex.Path objects into one continuous path.
 
-        The first Move command of path_b is dropped so the pen just continues
-        from where path_a left off, creating a single connected subpath.
+        The first Move of path_b is dropped so the pen continues from
+        where path_a ended.
         """
         new_cmds = list(path_a)
         first_b = True
         for cmd in path_b:
             if first_b and isinstance(cmd, inkex.paths.Move):
-                # Skip the initial M of the second path – we're already there
                 first_b = False
                 continue
             first_b = False
+            # Also skip any stray ZoneClose from b
+            if isinstance(cmd, inkex.paths.ZoneClose):
+                continue
             new_cmds.append(cmd)
         return inkex.Path(new_cmds)
 
