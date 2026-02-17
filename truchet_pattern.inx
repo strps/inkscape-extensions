@@ -9,6 +9,11 @@
     <param name="columns" type="int" min="1" max="100" gui-text="Columns">5</param>
     <param name="rows" type="int" min="1" max="100" gui-text="Rows">5</param>
     <param name="tile_size" type="float" min="1" max="100" gui-text="Tile Size">10</param>
+    <param name="convert_to_paths" type="bool" gui-text="Convert symbols to paths">false</param>
+    <param name="join_paths" type="bool" gui-text="Join adjacent paths">false</param>
+    <param name="join_tolerance" type="float" min="0.01" max="10" precision="2" gui-text="Join tolerance">0.1</param>
+    <param name="replace_stroke_width" type="bool" gui-text="Replace stroke width">false</param>
+    <param name="stroke_width" type="float" min="0.01" max="100" precision="2" gui-text="Stroke width">1.0</param>
 
     <param/>
     <effect>
