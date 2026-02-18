@@ -80,24 +80,77 @@ def join_all_paths(root, tolerance, auto_close=True):
 
 
 import re as _re
+import xml.etree.ElementTree as _ET
+
+
+def _tag_local(elem):
+    t = elem.tag
+    return t.split("}")[-1] if "}" in t else t
+
+
+def _circle_to_path(cx, cy, r):
+    from svgpathtools import Arc, Path as SPath
+    top = complex(cx, cy - r)
+    bottom = complex(cx, cy + r)
+    a1 = Arc(start=top, radius=complex(r, r), rotation=0,
+             large_arc=True, sweep=True, end=bottom)
+    a2 = Arc(start=bottom, radius=complex(r, r), rotation=0,
+             large_arc=True, sweep=True, end=top)
+    return SPath(a1, a2)
+
+
+def _ellipse_to_path(cx, cy, rx, ry):
+    from svgpathtools import Arc, Path as SPath
+    top = complex(cx, cy - ry)
+    bottom = complex(cx, cy + ry)
+    a1 = Arc(start=top, radius=complex(rx, ry), rotation=0,
+             large_arc=True, sweep=True, end=bottom)
+    a2 = Arc(start=bottom, radius=complex(rx, ry), rotation=0,
+             large_arc=True, sweep=True, end=top)
+    return SPath(a1, a2)
 
 
 def stroke_to_path_in_svg(root, width, samples_per_segment=64):
-    """Convert every <path> stroke to a filled outline."""
-    ns_path = f"{{{SVG_NS}}}path"
+    """Convert every <path>, <circle>, <ellipse> stroke to a filled outline."""
+    target_tags = {"path", "circle", "ellipse"}
     count = 0
-    for elem in list(root.iter(ns_path)):
-        d = elem.get("d", "")
-        if not d:
+    parent_map = {c: p for p in root.iter() for c in p}
+
+    for elem in list(root.iter()):
+        tag = _tag_local(elem)
+        if tag not in target_tags:
             continue
-        p = parse_path(d)
+
+        if tag == "path":
+            d = elem.get("d", "")
+            if not d:
+                continue
+            p = parse_path(d)
+        elif tag == "circle":
+            cx = float(elem.get("cx", "0"))
+            cy = float(elem.get("cy", "0"))
+            r = float(elem.get("r", "0"))
+            if r <= 0:
+                continue
+            p = _circle_to_path(cx, cy, r)
+        elif tag == "ellipse":
+            cx = float(elem.get("cx", "0"))
+            cy = float(elem.get("cy", "0"))
+            rx = float(elem.get("rx", "0"))
+            ry = float(elem.get("ry", "0"))
+            if rx <= 0 or ry <= 0:
+                continue
+            p = _ellipse_to_path(cx, cy, rx, ry)
+        else:
+            continue
+
         t_str = elem.get("transform", "")
         if t_str:
             p = apply_transform_to_path(p, parse_transform(t_str))
-            if "transform" in elem.attrib:
-                del elem.attrib["transform"]
+
         outlined = stroke_to_path(p, width, samples_per_segment)
-        elem.set("d", outlined.d())
+
+        # Style: stroke color → fill, remove stroke
         style = elem.get("style", "")
         style = _re.sub(r"stroke-width\s*:\s*[^;]*;?", "", style)
         stroke_color = "black"
@@ -106,10 +159,25 @@ def stroke_to_path_in_svg(root, width, samples_per_segment=64):
             stroke_color = m.group(1).strip()
         style = _re.sub(r"stroke\s*:\s*[^;]*;?", "", style)
         style = _re.sub(r"fill\s*:\s*[^;]*;?", "", style)
-        style = f"fill:{stroke_color};stroke:none;{style}".rstrip(";")
-        elem.set("style", style)
+        style = f"fill:{stroke_color};stroke:none;fill-rule:evenodd;{style}".rstrip(";")
+
+        if tag in ("circle", "ellipse"):
+            parent = parent_map.get(elem, root)
+            idx = list(parent).index(elem)
+            parent.remove(elem)
+            new_elem = _ET.SubElement(parent, f"{{{SVG_NS}}}path")
+            parent.remove(new_elem)
+            parent.insert(idx, new_elem)
+        else:
+            new_elem = elem
+
+        new_elem.set("d", outlined.d())
+        new_elem.set("style", style)
+        for attr in ("transform", "cx", "cy", "r", "rx", "ry"):
+            if attr in new_elem.attrib:
+                del new_elem.attrib[attr]
         count += 1
-    print(f"  Converted {count} path(s) to outlined shapes (width={width:g})")
+    print(f"  Converted {count} element(s) to outlined shapes (width={width:g})")
 
 
 def join_svg_paths(

@@ -223,19 +223,34 @@ def _offset_segment(segment, offset, samples=64):
     return pts
 
 
-def stroke_to_path(svg_path, width, samples_per_segment=64):
+def _pts_to_closed_loop(pts):
+    """Convert a list of points into a closed Path of Line segments."""
+    if len(pts) < 2:
+        return Path()
+    segs = [Line(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
+    segs.append(Line(pts[-1], pts[0]))
+    return Path(*segs)
+
+
+def stroke_to_path(svg_path, width, samples_per_segment=64, close_tolerance=1e-3):
     """Convert a stroked path into a filled outline Path.
 
-    Creates two offset curves at ±width/2 from the original and connects
-    them into a closed polygon. Returns an svgpathtools.Path.
+    For **open** paths: creates two offset curves at ±width/2 and connects
+    them into a single closed polygon (strip).
+
+    For **closed** paths (start ≈ end within *close_tolerance*): creates two
+    concentric loops (outer + inner) so the result is an annulus/ring shape.
+    The two sub-paths are returned inside a single Path using an SVG
+    "even-odd" style cut-out (two closed loops).
 
     Args:
         svg_path: An svgpathtools.Path.
         width: Stroke width to expand.
         samples_per_segment: Sampling density per segment (higher = smoother).
+        close_tolerance: Max gap to consider a path closed.
 
     Returns:
-        svgpathtools.Path: Closed filled outline.
+        svgpathtools.Path: Closed filled outline (one or two loops).
     """
     half = width / 2.0
 
@@ -246,18 +261,23 @@ def stroke_to_path(svg_path, width, samples_per_segment=64):
         left_pts.extend(_offset_segment(seg, half, samples_per_segment))
         right_pts.extend(_offset_segment(seg, -half, samples_per_segment))
 
-    # Reverse right side so we go back along the path
-    right_pts.reverse()
-
-    # Combine into a closed polygon: left forward → right backward → close
-    all_pts = left_pts + right_pts
-    if len(all_pts) < 2:
+    if len(left_pts) < 2:
         return svg_path
 
-    segments = []
-    for i in range(len(all_pts) - 1):
-        segments.append(Line(all_pts[i], all_pts[i + 1]))
-    # Close
-    segments.append(Line(all_pts[-1], all_pts[0]))
+    # Detect if the original path is closed
+    start = svg_path.start
+    end = svg_path.end
+    is_closed = abs(start - end) <= close_tolerance
 
-    return Path(*segments)
+    if is_closed:
+        # Two concentric closed loops (outer + inner in opposite winding)
+        outer = _pts_to_closed_loop(left_pts)
+        right_pts.reverse()
+        inner = _pts_to_closed_loop(right_pts)
+        # Combine into one Path (two sub-loops — fill-rule:evenodd cuts hole)
+        return Path(*list(outer) + list(inner))
+    else:
+        # Open path: strip — left forward → right backward → close
+        right_pts.reverse()
+        all_pts = left_pts + right_pts
+        return _pts_to_closed_loop(all_pts)

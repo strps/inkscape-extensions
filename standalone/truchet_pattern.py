@@ -53,7 +53,7 @@ def generate_svg(symbols, tiles, tile_size, columns, rows):
 
     root = ET.Element(f"{{{SVG_NS}}}svg")
     # root.set("xmlns", SVG_NS)
-    # root.set("xmlns:xlink", XLINK_NS)
+    root.set("xmlns:xlink", XLINK_NS)
     root.set("width", str(w))
     root.set("height", str(h))
     root.set("viewBox", f"0 0 {w} {h}")
@@ -68,7 +68,6 @@ def generate_svg(symbols, tiles, tile_size, columns, rows):
     group = ET.SubElement(root, f"{{{SVG_NS}}}g")
     group.set("id", "truchet-pattern")
 
-    # Map use elements → symbol elements (ET.Element forbids arbitrary attrs)
     use_sym_map = {}
     for sym, matrix in tiles:
         use = ET.SubElement(group, f"{{{SVG_NS}}}use")
@@ -206,39 +205,112 @@ def replace_stroke_width(group, width):
         elem.set("style", style)
 
 
+def _circle_to_path(cx, cy, r):
+    """Convert a circle to an svgpathtools Path (two arcs)."""
+    from svgpathtools import Arc
+    # Two semicircular arcs
+    top = complex(cx, cy - r)
+    bottom = complex(cx, cy + r)
+    a1 = Arc(start=top, radius=complex(r, r), rotation=0,
+             large_arc=True, sweep=True, end=bottom)
+    a2 = Arc(start=bottom, radius=complex(r, r), rotation=0,
+             large_arc=True, sweep=True, end=top)
+    return Path(a1, a2)
+
+
+def _ellipse_to_path(cx, cy, rx, ry):
+    """Convert an ellipse to an svgpathtools Path (two arcs)."""
+    from svgpathtools import Arc
+    top = complex(cx, cy - ry)
+    bottom = complex(cx, cy + ry)
+    a1 = Arc(start=top, radius=complex(rx, ry), rotation=0,
+             large_arc=True, sweep=True, end=bottom)
+    a2 = Arc(start=bottom, radius=complex(rx, ry), rotation=0,
+             large_arc=True, sweep=True, end=top)
+    return Path(a1, a2)
+
+
+def _extract_stroke_style(elem):
+    """Extract stroke color from element style, return (stroke_color, cleaned_style)."""
+    style = elem.get("style", "")
+    # Remove stroke-width
+    style = re.sub(r"stroke-width\s*:\s*[^;]*;?", "", style)
+    # Extract stroke color
+    stroke_color = "black"
+    m = re.search(r"stroke\s*:\s*([^;]+)", style)
+    if m:
+        stroke_color = m.group(1).strip()
+    # Remove stroke and fill
+    style = re.sub(r"stroke\s*:\s*[^;]*;?", "", style)
+    style = re.sub(r"fill\s*:\s*[^;]*;?", "", style)
+    style = f"fill:{stroke_color};stroke:none;fill-rule:evenodd;{style}".rstrip(";")
+    return style
+
+
 def stroke_to_path_in_group(group, width):
-    """Convert every <path> stroke into a filled outline at the given width."""
-    ns_path = f"{{{SVG_NS}}}path"
+    """Convert every <path>, <circle>, <ellipse> stroke into a filled outline."""
+    target_tags = {"path", "circle", "ellipse"}
     count = 0
+    parent_map = {c: p for p in group.iter() for c in p}
+
     for elem in list(group.iter()):
-        if elem.tag != ns_path and _tag_local(elem) != "path":
+        tag = _tag_local(elem)
+        if tag not in target_tags:
             continue
-        d = elem.get("d", "")
-        if not d:
+
+        # Build an svgpathtools Path from the element
+        if tag == "path":
+            d = elem.get("d", "")
+            if not d:
+                continue
+            p = parse_path(d)
+        elif tag == "circle":
+            cx = float(elem.get("cx", "0"))
+            cy = float(elem.get("cy", "0"))
+            r = float(elem.get("r", "0"))
+            if r <= 0:
+                continue
+            p = _circle_to_path(cx, cy, r)
+        elif tag == "ellipse":
+            cx = float(elem.get("cx", "0"))
+            cy = float(elem.get("cy", "0"))
+            rx = float(elem.get("rx", "0"))
+            ry = float(elem.get("ry", "0"))
+            if rx <= 0 or ry <= 0:
+                continue
+            p = _ellipse_to_path(cx, cy, rx, ry)
+        else:
             continue
-        p = parse_path(d)
+
+        # Bake any transform
         t_str = elem.get("transform", "")
         if t_str:
             p = apply_transform_to_path(p, parse_transform(t_str))
-            if "transform" in elem.attrib:
-                del elem.attrib["transform"]
+
         outlined = stroke_to_path(p, width)
-        elem.set("d", outlined.d())
-        # Switch from stroke to fill
-        style = elem.get("style", "")
-        # Remove stroke-width
-        style = re.sub(r"stroke-width\s*:\s*[^;]*;?", "", style)
-        # Set fill to current stroke color (or black), remove stroke
-        stroke_color = "black"
-        m = re.search(r"stroke\s*:\s*([^;]+)", style)
-        if m:
-            stroke_color = m.group(1).strip()
-        style = re.sub(r"stroke\s*:\s*[^;]*;?", "", style)
-        style = re.sub(r"fill\s*:\s*[^;]*;?", "", style)
-        style = f"fill:{stroke_color};stroke:none;{style}".rstrip(";")
-        elem.set("style", style)
+        style = _extract_stroke_style(elem)
+
+        # Replace element with a <path>
+        if tag in ("circle", "ellipse"):
+            parent = parent_map.get(elem, group)
+            idx = list(parent).index(elem)
+            parent.remove(elem)
+            new_elem = ET.SubElement(parent, f"{{{SVG_NS}}}path")
+            # Move to correct position
+            parent.remove(new_elem)
+            parent.insert(idx, new_elem)
+        else:
+            new_elem = elem
+
+        new_elem.set("d", outlined.d())
+        new_elem.set("style", style)
+        # Clean up attributes that no longer apply
+        for attr in ("transform", "cx", "cy", "r", "rx", "ry"):
+            if attr in new_elem.attrib:
+                del new_elem.attrib[attr]
         count += 1
-    print(f"  Converted {count} path(s) to outlined shapes (width={width:g})")
+    print(f"  Converted {count} element(s) to outlined shapes (width={width:g})")
+    print(f"    (paths, circles, ellipses → filled outlines)")
 
 
 def generate_truchet(
@@ -246,7 +318,7 @@ def generate_truchet(
     output=None,
     columns=10,
     rows=10,
-    tile_size=8.0,
+    tile_size=40.0,
     seed=None,
     convert_to_paths=False,
     join=False,
@@ -319,7 +391,7 @@ def main():
     parser.add_argument("-o", "--output", default=None)
     parser.add_argument("-c", "--columns", type=int, default=10)
     parser.add_argument("-r", "--rows", type=int, default=10)
-    parser.add_argument("-s", "--tile-size", type=float, default=8.0)
+    parser.add_argument("-s", "--tile-size", type=float, default=40.0)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--convert-to-paths", action="store_true",
                         help="Inline symbol children as paths")
