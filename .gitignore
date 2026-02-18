@@ -1,0 +1,6 @@
+# Python bytecode
+__pycache__/
+
+# Standalone I/O directories
+standalone/input/
+standalone/output/
